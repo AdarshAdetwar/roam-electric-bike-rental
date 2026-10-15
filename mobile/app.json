@@ -1,0 +1,20 @@
+{
+  "expo": {
+    "name": "Roam",
+    "slug": "roam-motorbike-rental",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "plugins": [
+      "expo-secure-store",
+      "expo-status-bar",
+      "expo-font"
+    ],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.roam.scooterrental"
+    }
+  }
+}
