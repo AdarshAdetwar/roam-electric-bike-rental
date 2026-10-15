@@ -10,18 +10,73 @@ Roam is a React Native (Expo) mobile app backed by a JavaScript/Express REST API
 
 ## Database setup
 
-Create an empty database (skip this command if `roam` already exists):
+Start PostgreSQL, then open a terminal at the project root. Choose the instructions for your operating system. The commands below assume the PostgreSQL role is named `postgres`; if you use another role, replace `postgres` in the commands and use that role in `DATABASE_URL` below.
 
-```sql
-CREATE DATABASE roam;
+### Windows (PowerShell)
+
+Locate the PostgreSQL command-line client. PostgreSQL may not be on `PATH`; this searches the standard Windows installation locations and uses the installed version it finds:
+
+```powershell
+$psql = Get-ChildItem "C:\Program Files\PostgreSQL","C:\Program Files (x86)\PostgreSQL" -Filter psql.exe -Recurse -ErrorAction SilentlyContinue |
+  Where-Object { $_.FullName -notlike "*pgAdmin 4*" } |
+  Select-Object -First 1 -ExpandProperty FullName
+$psql
+& $psql --version
 ```
 
-Apply the schema and sample inventory from the repository root:
+Keep using this same PowerShell window for the remaining database commands because `$psql` is a session variable. If the search returns nothing, install PostgreSQL command-line tools, add their `bin` directory to `PATH`, or use SQL Shell/pgAdmin. If PostgreSQL is installed in a nonstandard directory, find `psql.exe` there and set `$psql` to its full path.
+
+Check whether `roam` already exists:
+
+```powershell
+& $psql -U postgres -l
+```
+
+If `roam` is not listed, create it:
+
+```powershell
+& $psql -U postgres -c "CREATE DATABASE roam;"
+```
+
+If `roam` is already listed, skip the create command. Enter the PostgreSQL password when prompted. From the project root, apply the schema and sample motorbike inventory:
+
+```powershell
+& $psql -U postgres -d roam -f ".\backend\src\db\schema.sql"
+& $psql -U postgres -d roam -f ".\backend\src\db\seed.sql"
+```
+
+Both SQL files are safe to re-run. Confirm setup by checking the tables and sample motorbike count:
+
+```powershell
+& $psql -U postgres -d roam -P pager=off -c "\dt"
+& $psql -U postgres -d roam -P pager=off -c "SELECT count(*) AS motorbike_count FROM scooters;"
+```
+
+### macOS/Linux (Terminal)
+
+Make sure PostgreSQL command-line tools are installed and `psql` is on `PATH`. From the project root, check the client and list databases:
+
+```sh
+psql --version
+psql -U postgres -l
+```
+
+If `roam` is not listed, create it; otherwise skip this command:
+
+```sh
+psql -U postgres -c "CREATE DATABASE roam;"
+```
+
+Apply the schema and sample fleet, then verify the tables and seed data:
 
 ```sh
 psql -U postgres -d roam -f backend/src/db/schema.sql
 psql -U postgres -d roam -f backend/src/db/seed.sql
+psql -U postgres -d roam -c "\dt"
+psql -U postgres -d roam -c "SELECT count(*) AS motorbike_count FROM scooters;"
 ```
+
+On macOS, PostgreSQL can be installed with a package manager such as Homebrew; on Linux, use the distribution's PostgreSQL packages. If `psql` is not found, install the PostgreSQL client tools or add their install directory to `PATH`.
 
 The schema is designed for the application and documented in [docs/database.md](./docs/database.md). It includes partial unique indexes that prevent concurrent active rides for the same rider or motorbike.
 
@@ -30,27 +85,47 @@ The schema is designed for the application and documented in [docs/database.md](
 **Existing database from an older version of Roam:** If its `users` table does not have a `full_name` column, apply this migration once before starting the updated backend. If the column already exists, do not run it:
 
 ```powershell
+& $psql -U postgres -d roam -f ".\backend\src\db\migrations\20261015_add_user_full_name.sql"
+```
+
+On macOS/Linux, run the migration from the project root with:
+
+```sh
 psql -U postgres -d roam -f backend/src/db/migrations/20261015_add_user_full_name.sql
 ```
 
 ## Backend setup
 
-```sh
-cd backend
-copy .env.example .env
+Open a terminal at the project root. On Windows PowerShell, create the backend environment file with:
+
+```powershell
+Set-Location .\backend
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 ```
 
-On macOS/Linux, replace `copy` with `cp`. Edit `backend/.env` and set `DATABASE_URL` and a random `JWT_SECRET` of at least 32 characters. Keep `ASSIGNMENT_MODE=true` for local assignment testing; set it to `false` outside that context.
-
-Install and run:
+On macOS/Linux, use:
 
 ```sh
+cd backend
+cp -n .env.example .env
+```
+
+Edit `backend/.env`. Set `DATABASE_URL` to your local PostgreSQL connection string (for example, `postgresql://postgres:YOUR_PASSWORD@localhost:5432/roam`) and replace `JWT_SECRET` with a random secret of at least 32 characters. URL-encode special characters in the password if needed. Keep `ASSIGNMENT_MODE=true` for local assignment testing; set it to `false` outside that context. Do not commit `.env` files or real secrets.
+
+Install dependencies and create the demo account from the `backend` directory:
+
+```powershell
 npm install
 npm run seed:demo-user
+```
+
+These npm commands are the same in macOS/Linux. Then start the API and leave this terminal open:
+
+```powershell
 npm run dev
 ```
 
-The API listens on port `3000`. Health check: `GET http://localhost:3000/api/health`.
+Keep this terminal open. The API listens on port `3000`; verify it by opening `http://localhost:3000/api/health` in a browser. The response should be `{"status":"ok"}`.
 
 Demo login:
 
@@ -63,43 +138,58 @@ The demo-user script is safe to re-run and resets the dedicated demo account pas
 
 ## Mobile setup
 
-Set the API host in `mobile/.env` (copy `mobile/.env.example`). Use an address reachable from the device; the example above is for an app running on the same computer:
+Open a **second terminal** at the project root. On Windows PowerShell, copy the mobile environment template:
 
-```text
-EXPO_PUBLIC_API_URL=http://localhost:3000/api
+```powershell
+Set-Location .\mobile
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 ```
 
-- Android Studio emulator: `http://10.0.2.2:3000/api`
-- iOS simulator: `http://localhost:3000/api`
-- Physical device: `http://<your-computer-LAN-IP>:3000/api`
-
-Then run:
+On macOS/Linux, use:
 
 ```sh
 cd mobile
+cp -n .env.example .env
+```
+
+Edit `mobile\.env` and set `EXPO_PUBLIC_API_URL` to an address reachable from where the app is running:
+
+```text
+# Android Studio emulator:
+EXPO_PUBLIC_API_URL=http://10.0.2.2:3000/api
+
+# For iOS simulator or a mobile app running on the same computer:
+# EXPO_PUBLIC_API_URL=http://localhost:3000/api
+
+# For a physical phone, use your computer's LAN IP instead:
+# EXPO_PUBLIC_API_URL=http://<your-computer-LAN-IP>:3000/api
+```
+
+Install dependencies and start Metro from the `mobile` directory:
+
+```sh
 npm install
 npm start
 ```
 
-`npm start` starts Expo's Metro bundler. Keep this terminal open while using the app.
+Keep the Metro terminal open while using the app. These commands assume the backend is already running in the first terminal.
 
 ### Run on an Android emulator
 
-1. Install Android Studio and create/start an Android Virtual Device from **Device Manager**.
-2. In `mobile/.env`, set the API address to the Android emulator's host-loopback address:
+1. Install Android Studio, create an Android Virtual Device (AVD) in **Device Manager**, and start the emulator.
+2. Set `EXPO_PUBLIC_API_URL=http://10.0.2.2:3000/api` in `mobile\.env`. `10.0.2.2` lets the Android emulator reach the API on your computer.
+3. In the Metro terminal, wait for Expo to finish starting, then press **a** to open the app in the running emulator. Alternatively, open a third terminal at the project root and run:
 
-   ```text
-   EXPO_PUBLIC_API_URL=http://10.0.2.2:3000/api
+   ```sh
+   cd mobile
+   npm run android
    ```
-
-3. From the `mobile/` directory, run `npm start` and wait for Metro to be ready.
-4. Press **a** in the Expo terminal to open the app in the running Android emulator. Alternatively, run `npm run android` from a second terminal in `mobile/`; this starts Expo for Android and opens the emulator app.
 
 ### Run on a physical phone
 
-Set `EXPO_PUBLIC_API_URL` to `http://<your-computer-LAN-IP>:3000/api`, keep the phone and computer on the same Wi-Fi, then run `npm start` and scan the displayed QR code using Expo Go. Do not use `localhost` for the API URL on a phone: it would refer to the phone itself. Allow the backend through Windows Firewall if the phone cannot connect.
+Set `EXPO_PUBLIC_API_URL` to `http://<your-computer-LAN-IP>:3000/api`, keep the phone and computer on the same Wi-Fi, then scan the QR code shown by Metro using Expo Go. Do not use `localhost` for the API URL on a phone: it refers to the phone itself. Allow Node.js through Windows Firewall if the phone cannot connect.
 
-The iOS simulator option requires macOS and Xcode; it is not available on Windows. The app stores its JWT and basic user object using `expo-secure-store`.
+The iOS simulator requires macOS and Xcode, so it is not available on Windows. The app stores its JWT and basic user object using `expo-secure-store`.
 
 ## End-to-end smoke test
 
@@ -116,11 +206,6 @@ The iOS simulator option requires macOS and Xcode; it is not available on Window
 ## API documentation
 
 See [docs/api.md](./docs/api.md) for endpoint bodies, example responses, status codes, authentication, ownership behavior and the standard error shape.
-
-## Project walkthrough and run instructions
-
-- [Interview and code walkthrough](./docs/interview-guide/PROJECT_WALKTHROUGH.md) explains the architecture, files, application flows, database rules, and common interview questions.
-- [Run the application](./docs/interview-guide/RUN_APPLICATION.md) gives setup and startup instructions, including Windows, emulator, and physical-device networking.
 
 ## Assumptions and known limitations
 
