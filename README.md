@@ -10,7 +10,7 @@ Roam is a React Native (Expo) mobile app backed by a JavaScript/Express REST API
 
 ## Database setup
 
-Create an empty database:
+Create an empty database (skip this command if `roam` already exists):
 
 ```sql
 CREATE DATABASE roam;
@@ -25,7 +25,9 @@ psql -U postgres -d roam -f backend/src/db/seed.sql
 
 The schema is designed for the application and documented in [docs/database.md](./docs/database.md). It includes partial unique indexes that prevent concurrent active rides for the same rider or motorbike.
 
-If you already installed the previous Roam schema, apply the profile migration once before starting the updated backend:
+**Fresh database:** Run `schema.sql` and `seed.sql` as shown above. Do **not** run the migration below; `schema.sql` already creates the `full_name` column.
+
+**Existing database from an older version of Roam:** If its `users` table does not have a `full_name` column, apply this migration once before starting the updated backend. If the column already exists, do not run it:
 
 ```powershell
 psql -U postgres -d roam -f backend/src/db/migrations/20261015_add_user_full_name.sql
@@ -61,7 +63,7 @@ The demo-user script is safe to re-run and resets the dedicated demo account pas
 
 ## Mobile setup
 
-Set the API host in `mobile/.env` (copy `mobile/.env.example`). Use an address reachable from the device:
+Set the API host in `mobile/.env` (copy `mobile/.env.example`). Use an address reachable from the device; the example above is for an app running on the same computer:
 
 ```text
 EXPO_PUBLIC_API_URL=http://localhost:3000/api
@@ -79,7 +81,25 @@ npm install
 npm start
 ```
 
-Scan the Expo QR code with Expo Go or launch an emulator from the Expo CLI. The app stores its JWT and basic user object using `expo-secure-store`.
+`npm start` starts Expo's Metro bundler. Keep this terminal open while using the app.
+
+### Run on an Android emulator
+
+1. Install Android Studio and create/start an Android Virtual Device from **Device Manager**.
+2. In `mobile/.env`, set the API address to the Android emulator's host-loopback address:
+
+   ```text
+   EXPO_PUBLIC_API_URL=http://10.0.2.2:3000/api
+   ```
+
+3. From the `mobile/` directory, run `npm start` and wait for Metro to be ready.
+4. Press **a** in the Expo terminal to open the app in the running Android emulator. Alternatively, run `npm run android` from a second terminal in `mobile/`; this starts Expo for Android and opens the emulator app.
+
+### Run on a physical phone
+
+Set `EXPO_PUBLIC_API_URL` to `http://<your-computer-LAN-IP>:3000/api`, keep the phone and computer on the same Wi-Fi, then run `npm start` and scan the displayed QR code using Expo Go. Do not use `localhost` for the API URL on a phone: it would refer to the phone itself. Allow the backend through Windows Firewall if the phone cannot connect.
+
+The iOS simulator option requires macOS and Xcode; it is not available on Windows. The app stores its JWT and basic user object using `expo-secure-store`.
 
 ## End-to-end smoke test
 
